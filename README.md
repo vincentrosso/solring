@@ -21,3 +21,8 @@ Magic link: `https://solring.pages.dev/#k=<code>`.
 - `./reset.sh` wipes all messages and tasks on the live site.
 - Local: `npx wrangler pages dev` after removing the `[ai]` block from `wrangler.toml` (the binding needs a remote
   session and fails to start); local codes are in `.dev.vars`.
+
+## Logo
+The icon is the art from the oldest Sol Ring card (Limited Edition Alpha, 1993, Mark Tedin), cropped from Scryfall's art crop.
+It belongs to Wizards of the Coast; this is unofficial, free fan content and is not approved or endorsed by Wizards.
+Keep it off anything commercial or public-facing.
