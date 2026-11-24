@@ -1,0 +1,11 @@
+name = "solring"
+pages_build_output_dir = "public"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "solring"
+database_id = "d24c1a30-e541-4cb3-94a5-a461d9644168"
+
+[ai]
+binding = "AI"

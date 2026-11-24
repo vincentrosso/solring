@@ -1,0 +1,228 @@
+// Sol Ring API. Two people, two access codes:
+//   paul      - talks to the assistant, sees his requests
+//   katherine - his PA: sees everything, approves/edits drafts, works the task list
+const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+const MODES = ['auto', 'review', 'off']; // auto: AI answers Paul directly · review: Katherine approves first · off: human only
+const DAILY_AI_CAP = 300;
+
+const json = (data, status = 200) =>
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+  });
+
+function sameText(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function roleOf(request, env) {
+  const code = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  if (code.length < 8) return null;
+  if (env.PAUL_CODE && sameText(code, env.PAUL_CODE)) return 'paul';
+  if (env.KAT_CODE && sameText(code, env.KAT_CODE)) return 'katherine';
+  return null;
+}
+
+async function settings(db) {
+  const { results } = await db.prepare('SELECT key, value FROM settings').all();
+  return Object.fromEntries(results.map((r) => [r.key, r.value]));
+}
+const setSetting = (db, key, value) =>
+  db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
+    .bind(key, String(value)).run();
+const bump = (db) =>
+  db.prepare("INSERT INTO settings(key,value) VALUES('rev','1') ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1").run();
+
+const clean = (v, max) => String(v ?? '').trim().slice(0, max);
+const cleanDue = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null);
+
+async function getState(env, role, url) {
+  const db = env.DB;
+  const s = await settings(db);
+  const rev = s.rev || '0';
+  let katSeen = s.kat_seen || null;
+  if (role === 'katherine' && (!katSeen || Date.now() - Date.parse(katSeen) > 20000)) {
+    katSeen = new Date().toISOString();
+    await setSetting(db, 'kat_seen', katSeen); // presence only: no rev bump
+  }
+  const base = { role, rev, mode: s.mode || 'auto', kat_seen: katSeen };
+  if (url.searchParams.get('rev') === rev) return json({ ...base, unchanged: true });
+
+  const where = role === 'paul' ? "WHERE private=0 AND status='sent'" : "WHERE status!='discarded'";
+  const messages = (await db.prepare(
+    `SELECT * FROM (SELECT id,author,body,status,private,edited,created_at FROM messages ${where} ORDER BY id DESC LIMIT 300) ORDER BY id`
+  ).all()).results;
+  const tasks = (await db.prepare(
+    `SELECT id,title,detail,status,due,note,created_by,created_at,updated_at FROM tasks
+     WHERE status IN ('open','doing') OR (status='done' AND updated_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days'))
+     ORDER BY CASE status WHEN 'doing' THEN 0 WHEN 'open' THEN 1 ELSE 2 END, COALESCE(due,'9999'), id DESC`
+  ).all()).results;
+  const held = role === 'paul'
+    ? (await db.prepare("SELECT COUNT(*) AS n FROM messages WHERE status='held'").first()).n
+    : messages.filter((m) => m.status === 'held').length;
+  return json({ ...base, messages, tasks, held });
+}
+
+// ---- the assistant -------------------------------------------------------
+
+function systemPrompt(openTasks) {
+  const today = new Date().toISOString().slice(0, 10);
+  const list = openTasks.length
+    ? openTasks.map((t) => `- #${t.id} [${t.status}] ${t.title}${t.due ? ` (due ${t.due})` : ''}`).join('\n')
+    : '(none)';
+  return `You are Sol, Paul's personal assistant. Today is ${today}.
+Katherine is Paul's human PA. She reads this whole conversation and does the real-world work.
+You cannot act in the world yourself: no email, calendar, calls, purchases or bookings.
+- If Paul asks for something that needs doing, create a task for Katherine and tell Paul it is with her. Never claim it is done.
+- If Paul asks a question you can answer (facts, drafting text, planning, math), answer it yourself, briefly.
+- Do not create a task that duplicates one already open.
+- If a request is unclear, ask one short question instead of guessing.
+Open tasks:
+${list}
+
+Reply with ONLY a JSON object, no other text:
+{"reply": "what you say to Paul, plain text, short", "tasks": [{"title": "short imperative", "detail": "what Katherine needs to know", "due": "YYYY-MM-DD or null"}]}
+"tasks" is [] when nothing needs doing.`;
+}
+
+function parseAi(out) {
+  let raw = out && typeof out === 'object' && 'response' in out ? out.response : out;
+  if (raw && typeof raw === 'object') return raw;
+  raw = String(raw || '').trim();
+  const a = raw.indexOf('{');
+  const b = raw.lastIndexOf('}');
+  if (a >= 0 && b > a) {
+    try { return JSON.parse(raw.slice(a, b + 1)); } catch { /* fall through to plain text */ }
+  }
+  return { reply: raw, tasks: [] };
+}
+
+async function assist(env, msgId, body) {
+  const db = env.DB;
+  const mode = (await settings(db)).mode || 'auto';
+  if (mode === 'off') return;
+
+  let result = null;
+  const used = (await db.prepare(
+    "SELECT COUNT(*) AS n FROM messages WHERE author='assistant' AND created_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')"
+  ).first()).n;
+  if (env.AI && used < DAILY_AI_CAP) {
+    try {
+      const history = (await db.prepare(
+        "SELECT * FROM (SELECT id,author,body FROM messages WHERE private=0 AND status IN ('sent','held') ORDER BY id DESC LIMIT 30) ORDER BY id"
+      ).all()).results;
+      const openTasks = (await db.prepare("SELECT id,title,status,due FROM tasks WHERE status IN ('open','doing') ORDER BY id").all()).results;
+      const chat = [{ role: 'system', content: systemPrompt(openTasks) }];
+      for (const m of history) {
+        if (m.author === 'assistant') chat.push({ role: 'assistant', content: JSON.stringify({ reply: m.body, tasks: [] }) });
+        else chat.push({ role: 'user', content: m.author === 'paul' ? m.body : `[Katherine, the human PA, wrote to Paul]: ${m.body}` });
+      }
+      result = parseAi(await env.AI.run(MODEL, { messages: chat, max_tokens: 700, temperature: 0.3 }));
+    } catch (err) {
+      console.log('assist failed:', err && err.message);
+    }
+  }
+  if (!result || !clean(result.reply, 4000)) {
+    // No model (or it failed, or the free quota ran out): hand it straight to the human.
+    result = { reply: "Got it. I've passed this to Katherine.", tasks: [{ title: clean(body, 90), detail: clean(body, 2000) }] };
+  }
+
+  const tasks = Array.isArray(result.tasks) ? result.tasks.slice(0, 3) : [];
+  for (const t of tasks) {
+    const title = clean(t && t.title, 140);
+    if (!title) continue;
+    await db.prepare("INSERT INTO tasks(title,detail,due,created_by,source_msg) VALUES(?,?,?,'assistant',?)")
+      .bind(title, clean(t.detail, 2000), cleanDue(t.due), msgId).run();
+  }
+  await db.prepare("INSERT INTO messages(author,body,status) VALUES('assistant',?,?)")
+    .bind(clean(result.reply, 4000), mode === 'review' ? 'held' : 'sent').run();
+  await bump(db);
+}
+
+// ---- writes --------------------------------------------------------------
+
+async function postMessage(ctx, role, data) {
+  const db = ctx.env.DB;
+  const body = clean(data.body, 4000);
+  if (!body) return json({ error: 'empty message' }, 400);
+  const isPrivate = role === 'katherine' && data.private ? 1 : 0;
+  const row = await db.prepare('INSERT INTO messages(author,body,private) VALUES(?,?,?) RETURNING id')
+    .bind(role, body, isPrivate).first();
+  await bump(db);
+  if (role === 'paul') ctx.waitUntil(assist(ctx.env, row.id, body));
+  return json({ ok: true, id: row.id });
+}
+
+async function postDraft(env, data) {
+  const db = env.DB;
+  const draft = await db.prepare("SELECT id, body FROM messages WHERE id=? AND status='held'").bind(Number(data.id)).first();
+  if (!draft) return json({ error: 'no such draft' }, 404);
+  if (data.action === 'discard') {
+    await db.prepare("UPDATE messages SET status='discarded' WHERE id=?").bind(draft.id).run();
+  } else if (data.action === 'approve') {
+    const body = clean(data.body, 4000) || draft.body;
+    await db.prepare("UPDATE messages SET status='sent', body=?, edited=?, created_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?")
+      .bind(body, body === draft.body ? 0 : 1, draft.id).run();
+  } else return json({ error: 'bad action' }, 400);
+  await bump(db);
+  return json({ ok: true });
+}
+
+async function postTask(env, role, data) {
+  const db = env.DB;
+  if (!data.id) {
+    const title = clean(data.title, 140);
+    if (!title) return json({ error: 'title required' }, 400);
+    await db.prepare('INSERT INTO tasks(title,detail,due,created_by) VALUES(?,?,?,?)')
+      .bind(title, clean(data.detail, 2000), cleanDue(data.due), role).run();
+    await bump(db);
+    return json({ ok: true });
+  }
+  if (role !== 'katherine') return json({ error: 'only Katherine updates tasks' }, 403);
+  const task = await db.prepare('SELECT * FROM tasks WHERE id=?').bind(Number(data.id)).first();
+  if (!task) return json({ error: 'no such task' }, 404);
+  const status = ['open', 'doing', 'done', 'dropped'].includes(data.status) ? data.status : task.status;
+  const note = data.note === undefined ? task.note : clean(data.note, 2000);
+  const title = data.title === undefined ? task.title : clean(data.title, 140) || task.title;
+  const due = data.due === undefined ? task.due : cleanDue(data.due);
+  await db.prepare("UPDATE tasks SET status=?, note=?, title=?, due=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?")
+    .bind(status, note, title, due, task.id).run();
+  if (status === 'done' && task.status !== 'done') {
+    await db.prepare("INSERT INTO messages(author,body) VALUES('katherine',?)")
+      .bind(`Done: ${title}${note ? ` — ${note}` : ''}`).run();
+  }
+  await bump(db);
+  return json({ ok: true });
+}
+
+export async function onRequest(ctx) {
+  const { request, env } = ctx;
+  const url = new URL(request.url);
+  const path = url.pathname.replace(/^\/api\/?/, '').replace(/\/$/, '');
+  if (!env.DB) return json({ error: 'database not bound' }, 500);
+  const role = roleOf(request, env);
+  if (!role) return json({ error: 'bad or missing access code' }, 401);
+
+  try {
+    if (request.method === 'GET' && path === 'state') return await getState(env, role, url);
+    if (request.method !== 'POST') return json({ error: 'not found' }, 404);
+    const data = await request.json().catch(() => ({}));
+    if (path === 'message') return await postMessage(ctx, role, data);
+    if (path === 'task') return await postTask(env, role, data);
+    if (role !== 'katherine') return json({ error: 'not found' }, 404);
+    if (path === 'draft') return await postDraft(env, data);
+    if (path === 'mode') {
+      if (!MODES.includes(data.mode)) return json({ error: 'bad mode' }, 400);
+      await setSetting(env.DB, 'mode', data.mode);
+      await bump(env.DB);
+      return json({ ok: true });
+    }
+    return json({ error: 'not found' }, 404);
+  } catch (err) {
+    console.log('api error:', err && err.stack);
+    return json({ error: 'server error' }, 500);
+  }
+}

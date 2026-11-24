@@ -1,0 +1,23 @@
+# Sol Ring
+
+Paul's personal assistant, monitored by Katherine (his PA). Live: https://solring.pages.dev
+
+- **Paul** chats with Sol (an AI). Questions get answered; anything that needs doing becomes a task for Katherine.
+- **Katherine** sees the whole conversation, works the task list, writes to Paul as herself, and keeps private notes.
+  She picks who answers Paul: **Auto** (Sol replies at once), **Review** (nothing reaches Paul until she approves or edits it), **Off** (Sol silent).
+- Sol cannot act in the world (no email, calendar, calls). It only talks and hands work to Katherine.
+
+## How it is built
+Static page (`public/index.html`) + one Cloudflare Pages Function (`functions/api/[[path]].js`) + D1 (`schema.sql`).
+The model is Cloudflare Workers AI (free daily allowance, `[ai]` binding). If the model fails or the allowance runs out,
+Paul's message becomes a task for Katherine instead.
+
+Sign-in is one access code per person (Pages secrets `PAUL_CODE`, `KAT_CODE`); codes are in `~/tmp/solring-codes.txt`.
+Magic link: `https://solring.pages.dev/#k=<code>`.
+
+## Commands
+- `./deploy.sh` applies the schema and deploys (pastrami Cloudflare token).
+- `./domain.sh` one-time: adds solring.ndex.us.
+- `./reset.sh` wipes all messages and tasks on the live site.
+- Local: `npx wrangler pages dev` after removing the `[ai]` block from `wrangler.toml` (the binding needs a remote
+  session and fails to start); local codes are in `.dev.vars`.
