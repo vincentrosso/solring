@@ -23,6 +23,5 @@ Magic link: `https://solring.pages.dev/#k=<code>`.
   session and fails to start); local codes are in `.dev.vars`.
 
 ## Logo
-The icon is the art from the oldest Sol Ring card (Limited Edition Alpha, 1993, Mark Tedin), cropped from Scryfall's art crop.
-It belongs to Wizards of the Coast; this is unofficial, free fan content and is not approved or endorsed by Wizards.
-Keep it off anything commercial or public-facing.
+Original flat SVG drawn by `make_logo.py` (burning ring, a nod to the Alpha Sol Ring card; no card art is used).
+`python3 make_logo.py` rewrites `public/logo.svg` + `logo-full.svg`; the PNG app icons are `logo-full.svg` rendered with `qlmanage` and resized with `sips`.

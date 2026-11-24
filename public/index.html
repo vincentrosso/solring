@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#14121c">
 <title>Sol Ring</title>
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon-64.png" type="image/png">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <style>
 :root {
@@ -39,8 +39,7 @@ textarea { resize:none; }
 #app { height:100dvh; display:flex; flex-direction:column; max-width:1180px; margin:0 auto; }
 header { display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
 header h1 { font-size:18px; margin:0; letter-spacing:.02em; display:flex; align-items:center; gap:8px; }
-.ring { width:28px; height:28px; border-radius:50%; object-fit:cover; display:inline-block; box-shadow:0 0 0 1px var(--gold); }
-.fine { font-size:11px; color:var(--dim); margin-top:14px; }
+.ring { width:30px; height:30px; display:inline-block; }
 .who { color:var(--dim); font-size:13px; }
 .spacer { flex:1; }
 .seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
@@ -105,17 +104,16 @@ h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(-
 <body>
 <div id="app">
   <div id="login" hidden>
-    <img class="ring" src="icon-512.png" alt="">
+    <img class="ring" src="logo.svg" alt="">
     <h1 style="margin:0">Sol Ring</h1>
     <div class="who">Enter your access code</div>
     <input id="code" type="password" autocomplete="current-password" aria-label="Access code">
     <button class="primary" id="go">Open</button>
     <div id="err"></div>
-    <div class="fine">Logo: Sol Ring, Limited Edition Alpha (1993), art by Mark Tedin. Unofficial fan content, not approved or endorsed by Wizards of the Coast. Art &copy; Wizards of the Coast LLC.</div>
   </div>
 
   <header id="top" hidden>
-    <h1><img class="ring" src="icon-180.png" alt="">Sol Ring</h1>
+    <h1><img class="ring" src="logo.svg" alt="">Sol Ring</h1>
     <span class="who" id="who"></span>
     <span class="spacer"></span>
     <span class="seg tabs" id="tabs">
