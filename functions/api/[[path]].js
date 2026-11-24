@@ -1,6 +1,7 @@
 // Sol Ring API. Two people, two access codes:
 //   paul      - talks to the assistant, sees his requests
 //   katherine - his PA: sees everything, approves/edits drafts, works the task list
+//   admin     - Vincent: everything Katherine can do, plus delete items and wipe all
 const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const MODES = ['auto', 'review', 'off']; // auto: AI answers Paul directly · review: Katherine approves first · off: human only
 const DAILY_AI_CAP = 300;
@@ -23,6 +24,7 @@ function roleOf(request, env) {
   if (code.length < 8) return null;
   if (env.PAUL_CODE && sameText(code, env.PAUL_CODE)) return 'paul';
   if (env.KAT_CODE && sameText(code, env.KAT_CODE)) return 'katherine';
+  if (env.ADMIN_CODE && sameText(code, env.ADMIN_CODE)) return 'admin';
   return null;
 }
 
@@ -36,6 +38,8 @@ const setSetting = (db, key, value) =>
 const bump = (db) =>
   db.prepare("INSERT INTO settings(key,value) VALUES('rev','1') ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1").run();
 
+const AUTHOR = { paul: 'paul', katherine: 'katherine', admin: 'vincent' };
+const isStaff = (role) => role === 'katherine' || role === 'admin';
 const clean = (v, max) => String(v ?? '').trim().slice(0, max);
 const cleanDue = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null);
 
@@ -63,7 +67,14 @@ async function getState(env, role, url) {
   const held = role === 'paul'
     ? (await db.prepare("SELECT COUNT(*) AS n FROM messages WHERE status='held'").first()).n
     : messages.filter((m) => m.status === 'held').length;
-  return json({ ...base, messages, tasks, held });
+  const extra = {};
+  if (role === 'admin') {
+    extra.ai_today = (await db.prepare(
+      "SELECT COUNT(*) AS n FROM messages WHERE author='assistant' AND created_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')"
+    ).first()).n;
+    extra.ai_cap = DAILY_AI_CAP;
+  }
+  return json({ ...base, ...extra, messages, tasks, held });
 }
 
 // ---- the assistant -------------------------------------------------------
@@ -118,7 +129,8 @@ async function assist(env, msgId, body) {
       const chat = [{ role: 'system', content: systemPrompt(openTasks) }];
       for (const m of history) {
         if (m.author === 'assistant') chat.push({ role: 'assistant', content: JSON.stringify({ reply: m.body, tasks: [] }) });
-        else chat.push({ role: 'user', content: m.author === 'paul' ? m.body : `[Katherine, the human PA, wrote to Paul]: ${m.body}` });
+        else if (m.author === 'paul') chat.push({ role: 'user', content: m.body });
+        else chat.push({ role: 'user', content: `[${m.author === 'vincent' ? 'Vincent, who runs this app,' : 'Katherine, the human PA,'} wrote to Paul]: ${m.body}` });
       }
       result = parseAi(await env.AI.run(MODEL, { messages: chat, max_tokens: 700, temperature: 0.3 }));
     } catch (err) {
@@ -148,9 +160,9 @@ async function postMessage(ctx, role, data) {
   const db = ctx.env.DB;
   const body = clean(data.body, 4000);
   if (!body) return json({ error: 'empty message' }, 400);
-  const isPrivate = role === 'katherine' && data.private ? 1 : 0;
+  const isPrivate = isStaff(role) && data.private ? 1 : 0;
   const row = await db.prepare('INSERT INTO messages(author,body,private) VALUES(?,?,?) RETURNING id')
-    .bind(role, body, isPrivate).first();
+    .bind(AUTHOR[role], body, isPrivate).first();
   await bump(db);
   if (role === 'paul') ctx.waitUntil(assist(ctx.env, row.id, body));
   return json({ ok: true, id: row.id });
@@ -177,11 +189,11 @@ async function postTask(env, role, data) {
     const title = clean(data.title, 140);
     if (!title) return json({ error: 'title required' }, 400);
     await db.prepare('INSERT INTO tasks(title,detail,due,created_by) VALUES(?,?,?,?)')
-      .bind(title, clean(data.detail, 2000), cleanDue(data.due), role).run();
+      .bind(title, clean(data.detail, 2000), cleanDue(data.due), AUTHOR[role]).run();
     await bump(db);
     return json({ ok: true });
   }
-  if (role !== 'katherine') return json({ error: 'only Katherine updates tasks' }, 403);
+  if (!isStaff(role)) return json({ error: 'only Katherine updates tasks' }, 403);
   const task = await db.prepare('SELECT * FROM tasks WHERE id=?').bind(Number(data.id)).first();
   if (!task) return json({ error: 'no such task' }, 404);
   const status = ['open', 'doing', 'done', 'dropped'].includes(data.status) ? data.status : task.status;
@@ -191,8 +203,8 @@ async function postTask(env, role, data) {
   await db.prepare("UPDATE tasks SET status=?, note=?, title=?, due=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?")
     .bind(status, note, title, due, task.id).run();
   if (status === 'done' && task.status !== 'done') {
-    await db.prepare("INSERT INTO messages(author,body) VALUES('katherine',?)")
-      .bind(`Done: ${title}${note ? ` — ${note}` : ''}`).run();
+    await db.prepare('INSERT INTO messages(author,body) VALUES(?,?)')
+      .bind(AUTHOR[role], `Done: ${title}${note ? ` — ${note}` : ''}`).run();
   }
   await bump(db);
   return json({ ok: true });
@@ -212,11 +224,25 @@ export async function onRequest(ctx) {
     const data = await request.json().catch(() => ({}));
     if (path === 'message') return await postMessage(ctx, role, data);
     if (path === 'task') return await postTask(env, role, data);
-    if (role !== 'katherine') return json({ error: 'not found' }, 404);
+    if (!isStaff(role)) return json({ error: 'not found' }, 404);
     if (path === 'draft') return await postDraft(env, data);
     if (path === 'mode') {
       if (!MODES.includes(data.mode)) return json({ error: 'bad mode' }, 400);
       await setSetting(env.DB, 'mode', data.mode);
+      await bump(env.DB);
+      return json({ ok: true });
+    }
+    if (role !== 'admin') return json({ error: 'not found' }, 404);
+    if (path === 'admin/delete') {
+      const table = { message: 'messages', task: 'tasks' }[data.kind];
+      if (!table) return json({ error: 'bad kind' }, 400);
+      await env.DB.prepare(`DELETE FROM ${table} WHERE id=?`).bind(Number(data.id)).run();
+      await bump(env.DB);
+      return json({ ok: true });
+    }
+    if (path === 'admin/wipe') {
+      if (data.confirm !== 'wipe') return json({ error: 'confirm required' }, 400);
+      await env.DB.batch([env.DB.prepare('DELETE FROM messages'), env.DB.prepare('DELETE FROM tasks')]);
       await bump(env.DB);
       return json({ ok: true });
     }

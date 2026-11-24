@@ -59,6 +59,8 @@ section { min-height:0; display:flex; flex-direction:column; }
 .msg.paul { background:var(--paul); color:var(--paul-ink); border-color:transparent; }
 .msg.paul .meta { color:rgba(255,255,255,.7); }
 .msg.katherine { background:var(--kat); color:var(--kat-ink); border-color:transparent; }
+.msg.vincent { background:var(--gold-soft); border-color:var(--gold); }
+.msg .x, .task .x { float:right; margin-left:8px; font-size:12px; padding:0 6px; }
 .msg.note { background:var(--note); border-style:dashed; }
 .msg.held { background:var(--held); border-color:var(--gold); max-width:100%; align-self:stretch; }
 .msg.held textarea { margin:6px 0; }
@@ -123,6 +125,8 @@ h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(-
       <button data-mode="review" title="Sol drafts; nothing reaches Paul until you approve">Review</button>
       <button data-mode="off" title="Sol stays silent; you answer">Off</button>
     </span>
+    <span class="who" id="usage" hidden></span>
+    <button id="wipe" hidden title="Delete every message and task">Wipe all</button>
     <button class="quiet" id="out" title="Sign out">Sign out</button>
   </header>
 
@@ -195,7 +199,9 @@ function ago(iso) {
   return Math.round(s / 86400) + ' d ago';
 }
 const clock = (iso) => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-const NAMES = { paul: 'Paul', assistant: 'Sol', katherine: 'Katherine' };
+const NAMES = { paul: 'Paul', assistant: 'Sol', katherine: 'Katherine', vincent: 'Vincent' };
+const ME = { paul: 'paul', katherine: 'katherine', admin: 'vincent' };
+const staff = () => S.role === 'katherine' || S.role === 'admin';
 
 function showLogin(msg) {
   $('login').hidden = false; $('top').hidden = true; $('main').hidden = true;
@@ -222,8 +228,12 @@ function editing() {
 }
 
 function renderHeader() {
-  const kat = S.role === 'katherine';
-  $('who').textContent = kat ? 'Katherine · PA for Paul' : 'Katherine was here ' + ago(S.kat_seen);
+  const kat = staff();
+  const admin = S.role === 'admin';
+  $('who').textContent = admin ? 'Vincent · admin · Katherine was here ' + ago(S.kat_seen)
+    : kat ? 'Katherine · PA for Paul' : 'Katherine was here ' + ago(S.kat_seen);
+  $('wipe').hidden = !admin; $('usage').hidden = !admin;
+  if (admin && S.ai_cap) $('usage').textContent = `Sol replies today: ${S.ai_today}/${S.ai_cap}`;
   $('modes').hidden = !kat;
   for (const b of $('modes').children) b.classList.toggle('on', b.dataset.mode === S.mode);
   const open = (S.tasks || []).filter((t) => t.status !== 'done').length;
@@ -235,7 +245,7 @@ function render() {
   renderHeader();
   if (editing()) { dirty = true; return; }
   dirty = false;
-  const kat = S.role === 'katherine';
+  const kat = staff();
   $('privWrap').hidden = !kat;
   $('box').placeholder = kat ? 'Write to Paul as yourself' : 'Ask Sol anything, or say what you need done';
   $('tasksHead').textContent = kat ? 'Tasks for you' : 'Your requests';
@@ -263,10 +273,19 @@ function render() {
 }
 
 function bubble(m) {
-  const mine = m.author === S.role;
+  const mine = m.author === ME[S.role];
   const tag = m.private ? 'Private note' : NAMES[m.author] + (m.edited ? ' (edited by Katherine)' : '');
   return el('div', { class: `msg ${m.private ? 'note' : m.author}${mine ? ' mine' : ''}` },
-    el('span', { class: 'meta' }, `${tag} · ${clock(m.created_at)}`), m.body);
+    delBtn('message', m.id), el('span', { class: 'meta' }, `${tag} · ${clock(m.created_at)}`), m.body);
+}
+
+// Admin only: two clicks to delete one message or task.
+function delBtn(kind, id) {
+  if (S.role !== 'admin') return null;
+  return el('button', { class: 'quiet x', title: 'Delete', onclick: async (e) => {
+    if (e.target.textContent !== 'Sure?') { e.target.textContent = 'Sure?'; return; }
+    try { await api('admin/delete', { kind, id }); await poll(); } catch {}
+  } }, '×');
 }
 
 function draftCard(m) {
@@ -288,6 +307,7 @@ function taskCard(t, kat) {
   const today = new Date().toLocaleDateString('en-CA');
   const late = t.due && t.status !== 'done' && t.due < today;
   const card = el('div', { class: 'task' + (t.status === 'done' ? ' done' : '') },
+    delBtn('task', t.id),
     el('div', { class: 'row' },
       el('span', { class: 'pill ' + t.status }, t.status === 'doing' ? 'in progress' : t.status),
       t.due ? el('span', { class: 'pill ' + (late ? 'late' : 'done') }, (late ? 'overdue ' : 'due ') + t.due) : null,
@@ -348,6 +368,11 @@ $('tabs').addEventListener('click', (e) => {
 document.addEventListener('focusout', () => setTimeout(() => { if (dirty && S && !editing()) render(); }, 50));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 $('out').addEventListener('click', () => signOut(''));
+$('wipe').addEventListener('click', async (e) => {
+  if (e.target.textContent !== 'Really wipe?') { e.target.textContent = 'Really wipe?'; setTimeout(() => { e.target.textContent = 'Wipe all'; }, 4000); return; }
+  e.target.textContent = 'Wipe all';
+  try { await api('admin/wipe', { confirm: 'wipe' }); await poll(); } catch {}
+});
 $('go').addEventListener('click', () => { code = $('code').value.trim(); if (code) { store.set('solring-code', code); $('code').value = ''; poll(); } });
 $('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('go').click(); });
 
