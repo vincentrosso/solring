@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#6d0f2e">
+<meta name="theme-color" content="#241b4d">
 <title>Beatrix: a personal assistant with a person behind it</title>
 <meta name="description" content="Ask for what you need. An AI answers at once, and a real assistant sees every request and gets the real-world work done.">
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <style>
-:root { --bg:#f6f4ef; --panel:#fff; --ink:#1c1a24; --dim:#6d6a78; --line:#e2ded4; --gold:#a8791a; --wine:#6d0f2e; }
+:root { --bg:#faf6ee; --panel:#fffdf8; --ink:#1d1b2f; --dim:#6b6880; --line:#e8e1d3; --gold:#a86d00; --sun:#ffb81c; --deep:#241b4d; }
 @media (prefers-color-scheme: dark) {
-  :root { --bg:#14121c; --panel:#1e1b29; --ink:#ece9f3; --dim:#9995a8; --line:#322e42; --gold:#e0b34c; --wine:#a81a3c; }
+  :root { --bg:#141127; --panel:#1e1a38; --ink:#efecf8; --dim:#a29dbb; --line:#332d55; --gold:#ffc94a; --sun:#ffb81c; --deep:#241b4d; }
 }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -20,10 +20,10 @@ header { text-align:center; padding:64px 0 40px; }
 header img { width:112px; height:112px; }
 h1 { font-size:clamp(34px, 7vw, 52px); line-height:1.1; margin:18px 0 10px; letter-spacing:-.01em; }
 .tag { font-size:clamp(18px, 3.4vw, 22px); color:var(--dim); margin:0 auto 26px; max-width:30ch; }
-.btn { display:inline-block; background:var(--gold); color:#14121c; font-weight:600; text-decoration:none; padding:11px 22px; border-radius:10px; }
+.btn { display:inline-block; background:var(--sun); color:#1d1b2f; font-weight:600; text-decoration:none; padding:12px 26px; border-radius:999px; }
 .note { font-size:14px; color:var(--dim); margin-top:12px; }
 .cards { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; margin:8px 0 48px; }
-.card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:20px; }
 .card b { display:block; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--gold); margin-bottom:6px; }
 .card p { margin:0; font-size:15.5px; }
 h2 { font-size:22px; margin:40px 0 8px; }
@@ -33,6 +33,8 @@ li { margin-bottom:6px; }
 footer { border-top:1px solid var(--line); margin-top:48px; padding:22px 0 40px; font-size:14px; color:var(--dim); }
 a { color:var(--gold); }
 @media (max-width:640px) { .cards { grid-template-columns:1fr; } header { padding-top:44px; } }
+h1, h2 { font-family:"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-weight:600; }
+header img { width:128px; height:128px; }
 </style>
 </head>
 <body>

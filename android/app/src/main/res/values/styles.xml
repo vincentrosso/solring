@@ -1,6 +1,6 @@
 <resources>
-    <color name="brand">#6D0F2E</color>
-    <color name="paper">#F6F4EF</color>
+    <color name="brand">#241B4D</color>
+    <color name="paper">#FAF6EE</color>
     <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/paper</item>
         <item name="android:statusBarColor">@color/brand</item>

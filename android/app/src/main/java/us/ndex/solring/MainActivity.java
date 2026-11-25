@@ -16,8 +16,8 @@ import android.webkit.WebViewClient;
  * the page's own storage: sign in once by typing the code or pasting the magic link.
  */
 public class MainActivity extends Activity {
-    private static final String APP_URL = "https://solring.ndex.us/";
-    private static final String APP_HOST = "solring.ndex.us";
+    private static final String APP_URL = "https://beatrix.ndex.us/";
+    private static final String APP_HOST = "beatrix.ndex.us";
     private WebView web;
 
     @Override
@@ -42,9 +42,9 @@ public class MainActivity extends Activity {
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (!request.isForMainFrame()) return;
                 String html = "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-                        + "<body style='font:17px sans-serif;padding:48px 24px;text-align:center;background:#f6f4ef;color:#1c1a24'>"
+                        + "<body style='font:17px sans-serif;padding:48px 24px;text-align:center;background:#faf6ee;color:#1d1b2f'>"
                         + "<h2>No connection</h2><p>Beatrix needs the internet.</p>"
-                        + "<p><a href='" + APP_URL + "' style='color:#a8791a;font-weight:600'>Try again</a></p></body>";
+                        + "<p><a href='" + APP_URL + "' style='color:#a86d00;font-weight:600'>Try again</a></p></body>";
                 view.loadDataWithBaseURL(APP_URL, html, "text/html", "utf-8", APP_URL);
             }
         });
