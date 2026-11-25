@@ -455,6 +455,7 @@ $('wipe').addEventListener('click', async (e) => {
 // The moderator's private link: /#k=CODE signs in once, then the code leaves the address bar.
 const hash = new URLSearchParams(location.hash.slice(1));
 if (hash.get('k')) { code = hash.get('k'); store.set('solring-code', code); history.replaceState(null, '', location.pathname); }
+if (hash.get('tab') === 'tasks') $('tasksTab').click();   // #tab=tasks opens on the task list
 poll();
 </script>
 </body>
