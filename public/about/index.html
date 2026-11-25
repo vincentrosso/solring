@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Kept out of search until the final name is chosen: remove this line then. -->
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#6d0f2e">
+<title>Sol Ring: a personal assistant with a person behind it</title>
+<meta name="description" content="Ask for what you need. An AI answers at once, and a real assistant sees every request and gets the real-world work done.">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<style>
+:root { --bg:#f6f4ef; --panel:#fff; --ink:#1c1a24; --dim:#6d6a78; --line:#e2ded4; --gold:#a8791a; --wine:#6d0f2e; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#14121c; --panel:#1e1b29; --ink:#ece9f3; --dim:#9995a8; --line:#322e42; --gold:#e0b34c; --wine:#a81a3c; }
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.wrap { max-width:760px; margin:0 auto; padding:0 20px; }
+header { text-align:center; padding:64px 0 40px; }
+header img { width:112px; height:112px; }
+h1 { font-size:clamp(34px, 7vw, 52px); line-height:1.1; margin:18px 0 10px; letter-spacing:-.01em; }
+.tag { font-size:clamp(18px, 3.4vw, 22px); color:var(--dim); margin:0 auto 26px; max-width:30ch; }
+.btn { display:inline-block; background:var(--gold); color:#14121c; font-weight:600; text-decoration:none; padding:11px 22px; border-radius:10px; }
+.note { font-size:14px; color:var(--dim); margin-top:12px; }
+.cards { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; margin:8px 0 48px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; }
+.card b { display:block; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--gold); margin-bottom:6px; }
+.card p { margin:0; font-size:15.5px; }
+h2 { font-size:22px; margin:40px 0 8px; }
+p { margin:0 0 12px; }
+ul { margin:0 0 12px; padding-left:20px; }
+li { margin-bottom:6px; }
+footer { border-top:1px solid var(--line); margin-top:48px; padding:22px 0 40px; font-size:14px; color:var(--dim); }
+a { color:var(--gold); }
+@media (max-width:640px) { .cards { grid-template-columns:1fr; } header { padding-top:44px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="/logo.svg" alt="">
+    <h1 class="brand">Sol Ring</h1>
+    <p class="tag">Ask once. Get more back than you put in.</p>
+    <a class="btn" href="/">Sign in</a>
+    <div class="note">Invite only. You need an access code to sign in.</div>
+  </header>
+
+  <div class="cards">
+    <div class="card"><b>Ask</b><p>Say what you need in plain words. Questions get an answer in seconds from Sol, the built-in AI.</p></div>
+    <div class="card"><b>Hand off</b><p>Anything that needs doing in the real world becomes a task for your personal assistant, a real person.</p></div>
+    <div class="card"><b>Stay sure</b><p>Your assistant sees every request and can check, correct or replace what the AI says before it reaches you.</p></div>
+  </div>
+
+  <h2>How it works</h2>
+  <p>One person asks. One person helps. Sol sits between them: it answers what it can, turns the rest into a clear to-do list, and never claims a job is done when it is not. The AI cannot send email, book, buy or call. People do that.</p>
+
+  <h2 id="privacy">Privacy</h2>
+  <ul>
+    <li><b>What is stored:</b> the messages you write, the replies, and the task list. Nothing else: no contacts, no location, no photos.</li>
+    <li><b>Who can read it:</b> you, your assistant, and the person who runs the service.</li>
+    <li><b>Where it lives:</b> on Cloudflare's servers, which also run the AI model that writes Sol's replies. Your messages are sent to that model to produce an answer.</li>
+    <li><b>What we do not do:</b> no ads, no analytics or tracking, no selling or sharing of your data.</li>
+    <li><b>Sign-in:</b> an access code kept on your own device. There are no accounts or passwords.</li>
+    <li><b>Deleting:</b> ask the person who gave you your access code and everything you wrote is erased.</li>
+  </ul>
+
+  <h2 id="support">Help</h2>
+  <p>This is a small private service. For a new access code, a problem, or to have your data removed, contact the person who invited you.</p>
+
+  <footer>&copy; 2026 <span class="brand">Sol Ring</span> &middot; <a href="#privacy">Privacy</a> &middot; <a href="/">Sign in</a></footer>
+</div>
+</body>
+</html>
