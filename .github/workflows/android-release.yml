@@ -1,0 +1,30 @@
+name: android-release
+# Signed release build for Google Play (an .aab) plus a signed .apk. Run by hand.
+on: { workflow_dispatch: {} }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Build signed bundle and apk
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          echo "[$(date +%H:%M:%S)] keystore"
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.p12"
+          export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/upload.p12" VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))
+          echo "[$(date +%H:%M:%S)] build, versionCode $VERSION_CODE"
+          cd android && gradle --no-daemon --console=plain :app:bundleRelease :app:assembleRelease
+          rm -f "$RUNNER_TEMP/upload.p12"
+      - run: ls -la android/app/build/outputs/bundle/release/ android/app/build/outputs/apk/release/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: beatrix-android-release
+          path: |
+            android/app/build/outputs/bundle/release/app-release.aab
+            android/app/build/outputs/apk/release/app-release.apk

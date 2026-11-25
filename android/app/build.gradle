@@ -7,12 +7,30 @@ android {
         applicationId "us.ndex.solring"
         minSdk 26          // adaptive icons only, no PNG fallbacks to ship
         targetSdk 35
-        versionCode 3
+        versionCode((System.getenv("VERSION_CODE") ?: "3") as Integer)   // CI passes the run number
         versionName "0.3.0"
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    buildTypes { release { minifyEnabled false } }
+    // The upload key lives in GitHub secrets (and ~/tmp on the owner's Mac), never in this public repo.
+    def keystore = System.getenv("ANDROID_KEYSTORE_FILE")
+    signingConfigs {
+        release {
+            if (keystore) {
+                storeFile file(keystore)
+                storeType "pkcs12"
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias "upload"
+                keyPassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (keystore) signingConfig signingConfigs.release
+        }
+    }
 }
