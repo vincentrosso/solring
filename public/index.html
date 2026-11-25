@@ -100,6 +100,14 @@ h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(-
   .msg { max-width:90%; }
 }
 
+#seats { display:flex; flex-direction:column; gap:10px; }
+#seats button { padding:14px; font-size:18px; }
+#devices { padding:10px 16px 0; display:flex; flex-direction:column; gap:8px; max-height:45%; overflow-y:auto; }
+#devices h2 { padding:0; }
+.dev { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:9px 12px; font-size:14px; }
+.dev.pending { border-color:var(--sun); background:var(--held); }
+.dev .row { margin-top:6px; }
+.dev .row button { font-size:13px; padding:4px 10px; }
 /* Beatrix look */
 header h1, #login h1 { font-family:"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-weight:600; letter-spacing:0; }
 header h1 { font-size:21px; }
@@ -124,9 +132,11 @@ textarea:focus, input:focus { outline:2px solid var(--sun); outline-offset:1px; 
   <div id="login" hidden>
     <img class="ring" src="logo.svg" alt="">
     <h1 style="margin:0">Beatrix</h1>
-    <div class="who">Enter your access code</div>
-    <input id="code" type="password" autocomplete="current-password" aria-label="Access code">
-    <button class="primary" id="go">Open</button>
+    <div class="who" id="hello">Who's this?</div>
+    <div id="seats">
+      <button class="primary" data-seat="paul">I'm Paul</button>
+      <button class="primary" data-seat="katherine">I'm Katherine</button>
+    </div>
     <div id="err"></div>
     <a class="who" href="/about/">What is this?</a>
   </div>
@@ -161,6 +171,7 @@ textarea:focus, input:focus { outline:2px solid var(--sun); outline-offset:1px; 
       </div>
     </section>
     <section id="tasksPane">
+      <div id="devices" hidden></div>
       <h2 id="tasksHead">Tasks</h2>
       <div class="scroll" id="tasks"></div>
       <div class="addtask">
@@ -180,7 +191,13 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   del(k) { try { localStorage.removeItem(k); } catch {} },
 };
-let code = store.get('solring-code') || '';
+// No sign-in screen to fill in: this browser or app makes its own random token once and keeps it.
+let code = store.get('solring-code') || '';   // only Vincent's admin link sets this
+let device = store.get('beatrix-device');
+if (!device) {
+  device = [...crypto.getRandomValues(new Uint8Array(24))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  store.set('beatrix-device', device);
+}
 let S = null;          // last full state
 let rev = '';
 let timer = null;
@@ -200,10 +217,15 @@ function el(tag, props, ...kids) {
 async function api(path, body) {
   const res = await fetch('/api/' + path, {
     method: body ? 'POST' : 'GET',
-    headers: { authorization: 'Bearer ' + code, ...(body ? { 'content-type': 'application/json' } : {}) },
+    headers: { authorization: 'Bearer ' + (code || device), ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (res.status === 401) { signOut('That code did not work.'); throw new Error('unauthorized'); }
+  if (res.status === 401) {
+    const info = await res.json().catch(() => ({}));
+    if (code) { code = ''; store.del('solring-code'); return api(path, body); }   // stale code: carry on as this device
+    showLogin(info);
+    throw new Error('unauthorized');
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'request failed');
   return data;
@@ -222,22 +244,23 @@ const NAMES = { paul: 'Paul', assistant: 'Beatrix', katherine: 'Katherine', vinc
 const ME = { paul: 'paul', katherine: 'katherine', admin: 'vincent' };
 const staff = () => S.role === 'katherine' || S.role === 'admin';
 
-function showLogin(msg) {
+// Shown only until this device has a seat: one tap on a name, nothing to type.
+function showLogin(info) {
+  S = null; rev = '';
   $('login').hidden = false; $('top').hidden = true; $('main').hidden = true;
-  $('err').textContent = msg || '';
-}
-function signOut(msg) {
-  clearTimeout(timer); code = ''; S = null; rev = ''; store.del('solring-code'); showLogin(msg);
+  $('seats').hidden = Boolean(info.waiting || info.removed);
+  $('hello').textContent = info.removed ? 'This device was removed. Ask Vincent to let it back in.'
+    : info.waiting ? `Hi ${NAMES[info.waiting]}. One moment: waiting for Vincent to let this device in.`
+    : "Who's this?";
 }
 
 async function poll() {
   clearTimeout(timer);
-  if (!code) return;
   try {
     const data = await api('state' + (rev ? '?rev=' + encodeURIComponent(rev) : ''));
     if (data.unchanged && S) { S.kat_seen = data.kat_seen; S.mode = data.mode; renderHeader(); }
     else { S = data; rev = data.rev; render(); }
-  } catch (err) { if (!code) return; }
+  } catch (err) { /* not let in yet, or offline: keep trying */ }
   timer = setTimeout(poll, document.hidden ? 20000 : 4000);
 }
 
@@ -251,12 +274,13 @@ function renderHeader() {
   const admin = S.role === 'admin';
   $('who').textContent = admin ? 'Vincent · admin · Katherine was here ' + ago(S.kat_seen)
     : kat ? 'Katherine · PA for Paul' : 'Katherine was here ' + ago(S.kat_seen);
-  $('wipe').hidden = !admin; $('usage').hidden = !admin;
+  $('wipe').hidden = !admin; $('usage').hidden = !admin; $('out').hidden = !code;
   if (admin && S.ai_cap) $('usage').textContent = `Beatrix replies today: ${S.ai_today}/${S.ai_cap}`;
   $('modes').hidden = !kat;
   for (const b of $('modes').children) b.classList.toggle('on', b.dataset.mode === S.mode);
   const open = (S.tasks || []).filter((t) => t.status !== 'done').length;
-  $('tasksTab').textContent = (kat ? 'Tasks' : 'Requests') + (open ? ' (' + open + ')' : '');
+  const asking = (S.devices || []).filter((d) => d.status === 'pending').length;
+  $('tasksTab').textContent = (kat ? 'Tasks' : 'Requests') + (open + asking ? ' (' + (open + asking) + ')' : '');
 }
 
 function render() {
@@ -285,10 +309,35 @@ function render() {
   }
   if (pinned) feed.scrollTop = feed.scrollHeight;
 
+  renderDevices();
+
   const list = $('tasks');
   list.replaceChildren();
   if (!S.tasks.length) list.append(el('div', { class: 'empty' }, kat ? 'No open tasks.' : 'Nothing asked for yet.'));
   for (const t of S.tasks) list.append(taskCard(t, kat));
+}
+
+// Admin only: who is signed in on what, and one-tap answers for a device asking to get in.
+function renderDevices() {
+  const box = $('devices');
+  box.hidden = S.role !== 'admin';
+  if (box.hidden) return;
+  const act = (path, body) => async () => { try { await api(path, body); await poll(); } catch {} };
+  box.replaceChildren(el('h2', {}, 'Devices'),
+    el('div', { class: 'dev' },
+      S.enroll_until ? `A new device gets a free seat by itself until ${clock(S.enroll_until)}.` : 'A new device waits for your OK.',
+      el('div', { class: 'row' }, S.enroll_until
+        ? el('button', { onclick: act('admin/enroll', { hours: 0 }) }, 'Stop now')
+        : el('button', { onclick: act('admin/enroll', { hours: 72 }) }, 'Let new devices in for 3 days'))));
+  for (const d of S.devices || []) {
+    const pending = d.status === 'pending';
+    box.append(el('div', { class: 'dev' + (pending ? ' pending' : '') },
+      pending ? `${d.label} wants in as ${NAMES[d.role]} \u00b7 ${ago(d.created_at)}` : `${NAMES[d.role]} \u00b7 ${d.label} \u00b7 seen ${ago(d.last_seen)}`,
+      el('div', { class: 'row' },
+        pending ? el('button', { class: 'primary', onclick: act('admin/device', { id: d.id, action: 'allow', role: 'paul' }) }, 'Allow as Paul') : null,
+        pending ? el('button', { class: 'primary', onclick: act('admin/device', { id: d.id, action: 'allow', role: 'katherine' }) }, 'Allow as Katherine') : null,
+        el('button', { class: 'quiet', onclick: act('admin/device', { id: d.id, action: 'remove' }) }, pending ? 'Deny' : 'Remove'))));
+  }
 }
 
 function bubble(m) {
@@ -386,19 +435,27 @@ $('tabs').addEventListener('click', (e) => {
 });
 document.addEventListener('focusout', () => setTimeout(() => { if (dirty && S && !editing()) render(); }, 50));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
-$('out').addEventListener('click', () => signOut(''));
+$('out').addEventListener('click', () => { code = ''; store.del('solring-code'); S = null; rev = ''; poll(); });
+$('seats').addEventListener('click', async (e) => {
+  const role = e.target.dataset.seat;
+  if (!role) return;
+  $('err').textContent = '';
+  try {
+    const res = await fetch('/api/enroll', { method: 'POST', headers: { authorization: 'Bearer ' + device, 'content-type': 'application/json' }, body: JSON.stringify({ role }) });
+    if (!res.ok) $('err').textContent = (await res.json().catch(() => ({}))).error || 'That did not work. Try again.';
+  } catch { $('err').textContent = 'No connection. Try again.'; }
+  poll();
+});
 $('wipe').addEventListener('click', async (e) => {
   if (e.target.textContent !== 'Really wipe?') { e.target.textContent = 'Really wipe?'; setTimeout(() => { e.target.textContent = 'Wipe all'; }, 4000); return; }
   e.target.textContent = 'Wipe all';
   try { await api('admin/wipe', { confirm: 'wipe' }); await poll(); } catch {}
 });
-$('go').addEventListener('click', () => { code = $('code').value.trim().replace(/^.*#k=/, ''); if (code) { store.set('solring-code', code); $('code').value = ''; poll(); } });
-$('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('go').click(); });
 
-// Magic link: /#k=CODE signs in once, then the code leaves the address bar.
+// Vincent's admin link: /#k=CODE signs in once, then the code leaves the address bar.
 const hash = new URLSearchParams(location.hash.slice(1));
 if (hash.get('k')) { code = hash.get('k'); store.set('solring-code', code); history.replaceState(null, '', location.pathname); }
-if (code) poll(); else showLogin('');
+poll();
 </script>
 </body>
 </html>

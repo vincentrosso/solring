@@ -27,3 +27,14 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Sign-in without codes: each phone or browser makes its own random token and asks for a seat.
+CREATE TABLE IF NOT EXISTS devices (
+  id TEXT PRIMARY KEY,                     -- SHA-256 of the device's token (the token itself is never stored)
+  role TEXT NOT NULL,                      -- paul | katherine
+  status TEXT NOT NULL DEFAULT 'pending',  -- pending (waiting for Vincent) | active | revoked
+  label TEXT NOT NULL DEFAULT '',          -- "iPhone", "Android app", ...
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  last_seen TEXT
+);
+-- settings.enroll_until: while this time is in the future, the first device to ask for a free seat gets it at once.

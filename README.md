@@ -17,7 +17,12 @@ Static page (`public/index.html`) + one Cloudflare Pages Function (`functions/ap
 The model is Cloudflare Workers AI (free daily allowance, `[ai]` binding). If the model fails or the allowance runs out,
 Paul's message becomes a task for Katherine instead.
 
-Sign-in is one access code per person (Pages secrets `PAUL_CODE`, `KAT_CODE`, `ADMIN_CODE`). The three full magic links are in `~/tmp/solring-codes.txt`.
+**Sign-in has no codes** (Vincent's rule: no friction, nothing to type). A browser or app makes a random token once
+(`beatrix-device` in its storage; the server keeps only its SHA-256 in `devices`) and shows two buttons, "I'm Paul" / "I'm Katherine".
+While enrolment is open (`settings.enroll_until`), the first device to ask for a free seat gets it at once; any other device waits
+until Vincent taps Allow in the admin Devices panel. Admin can remove a device there. The app cannot read the phone's own number
+(iOS never allows it), so nothing asks for one. Vincent's admin sign-in is still his magic link (`ADMIN_CODE`), in `~/tmp/solring-codes.txt`;
+the old `PAUL_CODE` / `KAT_CODE` links still work as a back door.
 
 ## Commands
 - `./deploy.sh` applies the schema and deploys (pastrami Cloudflare token).
@@ -33,7 +38,7 @@ Palette: indigo `#241b4d`, marigold `#ffb81c`, coral `#ff6b4a`, cream `#fff3d6`;
 
 ## Phone apps
 `ios/` and `android/` are thin shells that load https://beatrix.ndex.us; a web deploy updates both with no store release.
-App id `us.ndex.solring`. Sign in inside the app by typing the code or pasting the whole magic link. **Build on GitHub Actions only, never on the laptop.**
+App id `us.ndex.solring`. Sign-in inside the app is the same one tap on a name. **Build on GitHub Actions only, never on the laptop.**
 - **Android** (plain Java, one WebView activity, minSdk 26; CI supplies Gradle 8.9). The `android` workflow uploads a debug APK
   artifact (`solring-debug-apk`) that installs directly on a phone.
 - **iOS** (XcodeGen `project.yml` + one SwiftUI file). The `ios` workflow builds unsigned for the simulator only. A real iPhone or

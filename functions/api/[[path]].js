@@ -1,7 +1,11 @@
-// Beatrix API. Two people, two access codes:
+// Beatrix API. Three seats:
 //   paul      - talks to the assistant, sees his requests
 //   katherine - his PA: sees everything, approves/edits drafts, works the task list
-//   admin     - Vincent: everything Katherine can do, plus delete items and wipe all
+//   admin     - Vincent: everything Katherine can do, plus devices, delete items and wipe all
+// Sign-in has no codes for Paul and Katherine: a phone or browser makes a random token, taps a
+// name once (POST /api/enroll) and is remembered. A free seat is given at once while enrolment
+// is open; otherwise Vincent allows the device with one tap. The old access codes still work,
+// which is how Vincent's own admin link signs in.
 const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const MODES = ['auto', 'review', 'off']; // auto: AI answers Paul directly · review: Katherine approves first · off: human only
 const DAILY_AI_CAP = 300;
@@ -19,13 +23,61 @@ function sameText(a, b) {
   return diff === 0;
 }
 
-function roleOf(request, env) {
-  const code = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  if (code.length < 8) return null;
-  if (env.PAUL_CODE && sameText(code, env.PAUL_CODE)) return 'paul';
-  if (env.KAT_CODE && sameText(code, env.KAT_CODE)) return 'katherine';
-  if (env.ADMIN_CODE && sameText(code, env.ADMIN_CODE)) return 'admin';
-  return null;
+const SEATS = ['paul', 'katherine'];
+const MAX_PENDING = 20;
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function deviceLabel(request) {
+  const ua = request.headers.get('user-agent') || '';
+  const kind = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android'
+    : /Macintosh/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows PC' : /Linux/.test(ua) ? 'Linux PC' : 'Unknown device';
+  const inApp = /; wv\)/.test(ua) || (/iPhone|iPad/.test(ua) && !/Safari\//.test(ua));
+  return kind + (inApp ? ' app' : ' browser');
+}
+
+// Who is asking: { role, deviceId, device }. role is null for a device with no seat yet.
+async function identify(request, env) {
+  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  if (token.length < 8) return { role: null };
+  if (env.PAUL_CODE && sameText(token, env.PAUL_CODE)) return { role: 'paul' };
+  if (env.KAT_CODE && sameText(token, env.KAT_CODE)) return { role: 'katherine' };
+  if (env.ADMIN_CODE && sameText(token, env.ADMIN_CODE)) return { role: 'admin' };
+  if (token.length < 32) return { role: null };
+  const deviceId = await sha256(token);
+  const device = await env.DB.prepare('SELECT id, role, status, last_seen FROM devices WHERE id=?').bind(deviceId).first();
+  if (device && device.status === 'active') {
+    if (!device.last_seen || Date.now() - Date.parse(device.last_seen) > 600000) {
+      await env.DB.prepare("UPDATE devices SET last_seen=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?").bind(deviceId).run();
+    }
+    return { role: device.role, deviceId, device };
+  }
+  return { role: null, deviceId, device };
+}
+
+const enrollOpen = (s) => Boolean(s.enroll_until && Date.parse(s.enroll_until) > Date.now());
+
+// A device with no seat asks for one. No typing: the page sends only the name that was tapped.
+async function enroll(request, env, who, data) {
+  const db = env.DB;
+  if (!who.deviceId) return json({ error: 'no device token' }, 400);
+  if (!SEATS.includes(data.role)) return json({ error: 'bad role' }, 400);
+  if (who.device && who.device.status === 'revoked') return json({ error: 'this device was removed' }, 403);
+  const taken = (await db.prepare("SELECT COUNT(*) AS n FROM devices WHERE role=? AND status='active'").bind(data.role).first()).n;
+  const status = enrollOpen(await settings(db)) && !taken ? 'active' : 'pending';
+  if (!who.device && status === 'pending') {
+    const waiting = (await db.prepare("SELECT COUNT(*) AS n FROM devices WHERE status='pending'").first()).n;
+    if (waiting >= MAX_PENDING) return json({ error: 'too many requests waiting' }, 429);
+  }
+  await db.prepare(
+    `INSERT INTO devices(id, role, status, label, last_seen) VALUES(?,?,?,?,strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+     ON CONFLICT(id) DO UPDATE SET role=excluded.role, status=excluded.status, label=excluded.label`
+  ).bind(who.deviceId, data.role, status, deviceLabel(request)).run();
+  await bump(db);
+  return json({ ok: true, status });
 }
 
 async function settings(db) {
@@ -73,6 +125,10 @@ async function getState(env, role, url) {
       "SELECT COUNT(*) AS n FROM messages WHERE author='assistant' AND created_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day')"
     ).first()).n;
     extra.ai_cap = DAILY_AI_CAP;
+    extra.enroll_until = enrollOpen(s) ? s.enroll_until : null;
+    extra.devices = (await db.prepare(
+      "SELECT id, role, status, label, created_at, last_seen FROM devices WHERE status!='revoked' ORDER BY status DESC, created_at DESC LIMIT 60"
+    ).all()).results;
   }
   return json({ ...base, ...extra, messages, tasks, held });
 }
@@ -215,13 +271,22 @@ export async function onRequest(ctx) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/^\/api\/?/, '').replace(/\/$/, '');
   if (!env.DB) return json({ error: 'database not bound' }, 500);
-  const role = roleOf(request, env);
-  if (!role) return json({ error: 'bad or missing access code' }, 401);
-
   try {
+    const who = await identify(request, env);
+    const role = who.role;
+    const post = request.method === 'POST';
+    const data = post ? await request.json().catch(() => ({})) : {};
+    if (!role) {
+      if (post && path === 'enroll') return await enroll(request, env, who, data);
+      const d = who.device;
+      return json({
+        error: 'not signed in',
+        waiting: d && d.status === 'pending' ? d.role : null,
+        removed: Boolean(d && d.status === 'revoked'),
+      }, 401);
+    }
     if (request.method === 'GET' && path === 'state') return await getState(env, role, url);
-    if (request.method !== 'POST') return json({ error: 'not found' }, 404);
-    const data = await request.json().catch(() => ({}));
+    if (!post) return json({ error: 'not found' }, 404);
     if (path === 'message') return await postMessage(ctx, role, data);
     if (path === 'task') return await postTask(env, role, data);
     if (!isStaff(role)) return json({ error: 'not found' }, 404);
@@ -237,6 +302,22 @@ export async function onRequest(ctx) {
       const table = { message: 'messages', task: 'tasks' }[data.kind];
       if (!table) return json({ error: 'bad kind' }, 400);
       await env.DB.prepare(`DELETE FROM ${table} WHERE id=?`).bind(Number(data.id)).run();
+      await bump(env.DB);
+      return json({ ok: true });
+    }
+    if (path === 'admin/device') {
+      const id = clean(data.id, 64);
+      if (data.action === 'allow' && SEATS.includes(data.role)) {
+        await env.DB.prepare("UPDATE devices SET status='active', role=? WHERE id=?").bind(data.role, id).run();
+      } else if (data.action === 'remove') {
+        await env.DB.prepare("UPDATE devices SET status='revoked' WHERE id=?").bind(id).run();
+      } else return json({ error: 'bad action' }, 400);
+      await bump(env.DB);
+      return json({ ok: true });
+    }
+    if (path === 'admin/enroll') {
+      const hours = Math.max(0, Math.min(168, Number(data.hours) || 0));
+      await setSetting(env.DB, 'enroll_until', hours ? new Date(Date.now() + hours * 3600000).toISOString() : '');
       await bump(env.DB);
       return json({ ok: true });
     }
