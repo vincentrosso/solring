@@ -69,7 +69,8 @@ async function enroll(request, env, who, data) {
   if (!SEATS.includes(data.role)) return json({ error: 'bad role' }, 400);
   if (who.device && who.device.status === 'revoked') return json({ error: 'this device was removed' }, 403);
   const taken = (await db.prepare("SELECT COUNT(*) AS n FROM devices WHERE role=? AND status='active'").bind(data.role).first()).n;
-  const status = enrollOpen(await settings(db)) && !taken ? 'active' : 'pending';
+  // While enrolment is open every device gets in at once (several per seat): a one-seat limit left Apple's reviewer stuck waiting.
+  const status = enrollOpen(await settings(db)) ? 'active' : 'pending';
   if (!who.device && status === 'pending') {
     const waiting = (await db.prepare("SELECT COUNT(*) AS n FROM devices WHERE status='pending'").first()).n;
     if (waiting >= MAX_PENDING) return json({ error: 'too many requests waiting' }, 429);
