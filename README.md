@@ -49,3 +49,15 @@ App id `us.ndex.solring`. Sign-in inside the app is the same one tap on a name. 
 ## Public page
 `public/about/index.html` is the only page open to the world: what the app is, privacy (`/about/#privacy`), help (`/about/#support`).
 It lists no contact address on purpose; the App Store will want one.
+
+## Store builds
+Both run by hand from the Actions tab (or `gh workflow run <name> --ref main`). All signing material is in repo secrets, with copies on the owner's Mac.
+- **`ios-release`**: archives with the newest Xcode on the runner, signs manually and uploads to App Store Connect with `altool`
+  (first upload 2026-11-24). The App Store Connect API key is role App Manager, which **cannot use Xcode's cloud signing**
+  ("Cloud signing permission error"), so the distribution certificate and the "Beatrix App Store" profile were created through the API
+  (they expire 2027-11-25; files in `~/tmp/solring-ios-signing/`). Build number = 100 + run number. Apple details: `~/tmp/solring-apple.txt`.
+- **`android-release`**: signed `.aab` (for Google Play) and `.apk`, artifact `beatrix-android-release`; last copies in `dist/` (gitignored).
+  Upload key: `~/tmp/solring-android-upload.p12`, details in `~/tmp/solring-android.txt`. versionCode = 100 + run number.
+- **Not done:** no Google Play developer account exists, so nothing is on Play. On Apple the build is uploaded but not submitted:
+  the listing still needs screenshots, description, age rating, privacy answers and review contact, and a web-view-only app risks
+  rejection under guideline 4.2.
