@@ -33,4 +33,5 @@ App id `us.ndex.solring`. Sign in inside the app by typing the code or pasting t
   artifact (`solring-debug-apk`) that installs directly on a phone.
 - **iOS** (XcodeGen `project.yml` + one SwiftUI file). The `ios` workflow builds unsigned for the simulator only. A real iPhone or
   TestFlight needs an Apple Developer account ($99/yr) and signing in CI. Until then: Safari > Share > Add to Home Screen.
-- macOS runners bill at 10x on a private repo; the iOS workflow only runs when `ios/` changes.
+- The repo is **public** (since 2026-11-24) so Actions is free; keep codes and keys out of it. Both builds passed that day.
+- Android download for a phone: https://github.com/vincentrosso/solring/releases/latest/download/SolRing.apk (re-upload after an Android change: `gh release upload v0.1.0 SolRing.apk --clobber`).
