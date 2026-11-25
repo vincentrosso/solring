@@ -12,6 +12,11 @@ jobs:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
+      - name: Newest Xcode (App Store uploads must use the iOS 26 SDK or later)
+        run: |
+          ls -d /Applications/Xcode_*.app | sed 's|/Applications/||' | tr '\n' ' '; echo
+          X=$(ls -d /Applications/Xcode_[0-9]*.app | grep -v -i beta | sort -V | tail -1)
+          sudo xcode-select -s "$X"; xcodebuild -version | tr '\n' ' '; echo
       - run: brew install xcodegen
       - name: Signing identity, profile and API key
         env:
