@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draws the Sol Ring logo: a flat, cel-shaded take on the Alpha card's burning ring.
+"""Draws the Beatrix logo: a flat, cel-shaded take on the Alpha card's burning ring.
 Writes public/logo.svg (rounded corners) and public/logo-full.svg (full bleed, for PNG app icons)."""
 import math
 
@@ -23,7 +23,7 @@ def glint(x, y, r, fill="#fff"):
 
 def svg(rounded):
     clip = '<clipPath id="frame"><rect width="512" height="512" rx="%d"/></clipPath>' % (104 if rounded else 0)
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sol Ring">
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Beatrix">
 <defs>{clip}
 <clipPath id="band"><path fill-rule="evenodd" d="M{CX - 120} {CY}a120 120 0 1 0 240 0a120 120 0 1 0 -240 0ZM{CX - 76} {CY}a76 76 0 1 0 152 0a76 76 0 1 0 -152 0Z"/></clipPath>
 <clipPath id="core"><circle cx="{CX}" cy="{CY}" r="76"/></clipPath></defs>

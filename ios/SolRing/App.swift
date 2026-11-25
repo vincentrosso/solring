@@ -41,7 +41,7 @@ struct WebView: UIViewRepresentable {
             let html = """
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <body style="font:17px -apple-system;padding:48px 24px;text-align:center;background:#f6f4ef;color:#1c1a24">
-            <h2>No connection</h2><p>Sol Ring needs the internet.</p>
+            <h2>No connection</h2><p>Beatrix needs the internet.</p>
             <p><a href="\(url.absoluteString)" style="color:#a8791a;font-weight:600">Try again</a></p></body>
             """
             webView.loadHTMLString(html, baseURL: url)

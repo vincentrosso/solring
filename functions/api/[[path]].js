@@ -1,4 +1,4 @@
-// Sol Ring API. Two people, two access codes:
+// Beatrix API. Two people, two access codes:
 //   paul      - talks to the assistant, sees his requests
 //   katherine - his PA: sees everything, approves/edits drafts, works the task list
 //   admin     - Vincent: everything Katherine can do, plus delete items and wipe all
@@ -84,7 +84,7 @@ function systemPrompt(openTasks) {
   const list = openTasks.length
     ? openTasks.map((t) => `- #${t.id} [${t.status}] ${t.title}${t.due ? ` (due ${t.due})` : ''}`).join('\n')
     : '(none)';
-  return `You are Sol, Paul's personal assistant. Today is ${today}.
+  return `You are Beatrix, Paul's personal assistant. Today is ${today}.
 Katherine is Paul's human PA. She reads this whole conversation and does the real-world work.
 You cannot act in the world yourself: no email, calendar, calls, purchases or bookings.
 - If Paul asks for something that needs doing, create a task for Katherine and tell Paul it is with her. Never claim it is done.

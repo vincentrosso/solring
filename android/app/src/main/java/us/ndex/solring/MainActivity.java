@@ -43,7 +43,7 @@ public class MainActivity extends Activity {
                 if (!request.isForMainFrame()) return;
                 String html = "<meta name='viewport' content='width=device-width, initial-scale=1'>"
                         + "<body style='font:17px sans-serif;padding:48px 24px;text-align:center;background:#f6f4ef;color:#1c1a24'>"
-                        + "<h2>No connection</h2><p>Sol Ring needs the internet.</p>"
+                        + "<h2>No connection</h2><p>Beatrix needs the internet.</p>"
                         + "<p><a href='" + APP_URL + "' style='color:#a8791a;font-weight:600'>Try again</a></p></body>";
                 view.loadDataWithBaseURL(APP_URL, html, "text/html", "utf-8", APP_URL);
             }

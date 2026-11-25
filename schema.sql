@@ -1,4 +1,4 @@
--- Sol Ring: Paul's assistant, monitored by Katherine (his PA).
+-- Beatrix: Paul's assistant, monitored by Katherine (his PA).
 CREATE TABLE IF NOT EXISTS messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   author TEXT NOT NULL,                 -- paul | assistant | katherine
