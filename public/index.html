@@ -192,7 +192,7 @@ const store = {
   del(k) { try { localStorage.removeItem(k); } catch {} },
 };
 // No sign-in screen to fill in: this browser or app makes its own random token once and keeps it.
-let code = store.get('solring-code') || '';   // only Vincent's admin link sets this
+let code = store.get('solring-code') || '';   // only the moderator's private link sets this
 let device = store.get('beatrix-device');
 if (!device) {
   device = [...crypto.getRandomValues(new Uint8Array(24))].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -240,7 +240,7 @@ function ago(iso) {
   return Math.round(s / 86400) + ' d ago';
 }
 const clock = (iso) => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-const NAMES = { paul: 'Paul', assistant: 'Beatrix', katherine: 'Katherine', vincent: 'Vincent' };
+const NAMES = { paul: 'Paul', assistant: 'Beatrix', katherine: 'Katherine', vincent: 'Moderator' };
 const ME = { paul: 'paul', katherine: 'katherine', admin: 'vincent' };
 const staff = () => S.role === 'katherine' || S.role === 'admin';
 
@@ -249,8 +249,8 @@ function showLogin(info) {
   S = null; rev = '';
   $('login').hidden = false; $('top').hidden = true; $('main').hidden = true;
   $('seats').hidden = Boolean(info.waiting || info.removed);
-  $('hello').textContent = info.removed ? 'This device was removed. Ask Vincent to let it back in.'
-    : info.waiting ? `Hi ${NAMES[info.waiting]}. One moment: waiting for Vincent to let this device in.`
+  $('hello').textContent = info.removed ? 'This device is no longer signed in.'
+    : info.waiting ? `Hi ${NAMES[info.waiting]}. One moment: getting this device ready.`
     : "Who's this?";
 }
 
@@ -272,7 +272,7 @@ function editing() {
 function renderHeader() {
   const kat = staff();
   const admin = S.role === 'admin';
-  $('who').textContent = admin ? 'Vincent · admin · Katherine was here ' + ago(S.kat_seen)
+  $('who').textContent = admin ? 'Moderator · Katherine was here ' + ago(S.kat_seen)
     : kat ? 'Katherine · PA for Paul' : 'Katherine was here ' + ago(S.kat_seen);
   $('wipe').hidden = !admin; $('usage').hidden = !admin; $('out').hidden = !code;
   if (admin && S.ai_cap) $('usage').textContent = `Beatrix replies today: ${S.ai_today}/${S.ai_cap}`;
@@ -290,7 +290,7 @@ function render() {
   dirty = false;
   const kat = staff();
   $('privWrap').hidden = !kat;
-  $('box').placeholder = kat ? 'Write to Paul as yourself' : 'Ask Beatrix anything, or say what you need done';
+  $('box').placeholder = S.role === 'admin' ? 'Write to Paul as Beatrix (he will not see it was you)' : kat ? 'Write to Paul as yourself' : 'Ask Beatrix anything, or say what you need done';
   $('tasksHead').textContent = kat ? 'Tasks for you' : 'Your requests';
   $('newTask').placeholder = kat ? 'Add a task' : 'Ask Katherine for something';
 
@@ -301,7 +301,7 @@ function render() {
   for (const m of S.messages) feed.append(m.status === 'held' ? draftCard(m) : bubble(m));
   if (!kat) {
     const last = S.messages[S.messages.length - 1];
-    if (S.held) feed.append(el('div', { class: 'status' }, 'Katherine is checking the reply…'));
+    if (S.held) feed.append(el('div', { class: 'status' }, 'Beatrix is thinking…'));
     else if (last && last.author === 'paul' && Date.now() - Date.parse(last.created_at) < 60000 && S.mode !== 'off')
       feed.append(el('div', { class: 'status' }, 'Beatrix is thinking…'));
     else if (last && last.author === 'paul' && S.mode === 'off')
@@ -341,8 +341,8 @@ function renderDevices() {
 }
 
 function bubble(m) {
-  const mine = m.author === ME[S.role];
-  const tag = m.private ? 'Private note' : NAMES[m.author] + (m.edited ? ' (edited by Katherine)' : '');
+  const mine = m.author === ME[S.role] || (S.role === 'admin' && m.edited === 2);
+  const tag = m.private ? 'Private note' : NAMES[m.author] + (m.edited === 2 ? ' · your hand' : m.edited ? ' · edited by Katherine' : '');
   return el('div', { class: `msg ${m.private ? 'note' : m.author}${mine ? ' mine' : ''}` },
     delBtn('message', m.id), el('span', { class: 'meta' }, `${tag} · ${clock(m.created_at)}`), m.body);
 }
@@ -452,7 +452,7 @@ $('wipe').addEventListener('click', async (e) => {
   try { await api('admin/wipe', { confirm: 'wipe' }); await poll(); } catch {}
 });
 
-// Vincent's admin link: /#k=CODE signs in once, then the code leaves the address bar.
+// The moderator's private link: /#k=CODE signs in once, then the code leaves the address bar.
 const hash = new URLSearchParams(location.hash.slice(1));
 if (hash.get('k')) { code = hash.get('k'); store.set('solring-code', code); history.replaceState(null, '', location.pathname); }
 poll();

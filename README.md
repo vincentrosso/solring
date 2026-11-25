@@ -9,7 +9,7 @@ Paul's personal assistant, monitored by Katherine (his PA). Live: https://beatri
 - **Paul** chats with Beatrix (an AI). Questions get answered; anything that needs doing becomes a task for Katherine.
 - **Katherine** sees the whole conversation, works the task list, writes to Paul as herself, and keeps private notes.
   She picks who answers Paul: **Auto** (Beatrix replies at once), **Review** (nothing reaches Paul until she approves or edits it), **Off** (Beatrix silent).
-- **Vincent** has an admin sign-in: everything Katherine has, plus delete any message or task, Wipe all, and Beatrix's reply count against the daily cap.
+- **The moderator** (Vincent) works out of sight through one private link: everything Katherine has, plus Devices, delete any message or task, Wipe all, and Beatrix's reply count. What he writes to Paul goes out as Beatrix (`messages.edited = 2`); his edits, private notes and name are never sent to Paul or Katherine, and nothing on the front mentions an admin. The privacy text on `/about/` still says the person who runs the service can read messages; keep that true.
 - Beatrix cannot act in the world (no email, calendar, calls). It only talks and hands work to Katherine.
 
 ## How it is built

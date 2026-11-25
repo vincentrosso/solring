@@ -6,6 +6,8 @@
 // name once (POST /api/enroll) and is remembered. A free seat is given at once while enrolment
 // is open; otherwise Vincent allows the device with one tap. The old access codes still work,
 // which is how Vincent's own admin link signs in.
+// Vincent moderates out of sight: what he writes to Paul goes out as the assistant, and his edits,
+// notes and name are never sent to Paul or Katherine. messages.edited: 0 none, 1 Katherine, 2 Vincent.
 const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const MODES = ['auto', 'review', 'off']; // auto: AI answers Paul directly · review: Katherine approves first · off: human only
 const DAILY_AI_CAP = 300;
@@ -107,10 +109,12 @@ async function getState(env, role, url) {
   const base = { role, rev, mode: s.mode || 'auto', kat_seen: katSeen };
   if (url.searchParams.get('rev') === rev) return json({ ...base, unchanged: true });
 
-  const where = role === 'paul' ? "WHERE private=0 AND status='sent'" : "WHERE status!='discarded'";
+  const where = role === 'paul' ? "WHERE private=0 AND status='sent'"
+    : role === 'katherine' ? "WHERE status!='discarded' AND author!='vincent'" : "WHERE status!='discarded'";
   const messages = (await db.prepare(
     `SELECT * FROM (SELECT id,author,body,status,private,edited,created_at FROM messages ${where} ORDER BY id DESC LIMIT 300) ORDER BY id`
   ).all()).results;
+  if (role !== 'admin') for (const m of messages) m.edited = role === 'katherine' && m.edited === 1 ? 1 : 0;
   const tasks = (await db.prepare(
     `SELECT id,title,detail,status,due,note,created_by,created_at,updated_at FROM tasks
      WHERE status IN ('open','doing') OR (status='done' AND updated_at > strftime('%Y-%m-%dT%H:%M:%SZ','now','-14 days'))
@@ -217,14 +221,15 @@ async function postMessage(ctx, role, data) {
   const body = clean(data.body, 4000);
   if (!body) return json({ error: 'empty message' }, 400);
   const isPrivate = isStaff(role) && data.private ? 1 : 0;
-  const row = await db.prepare('INSERT INTO messages(author,body,private) VALUES(?,?,?) RETURNING id')
-    .bind(AUTHOR[role], body, isPrivate).first();
+  const ghost = role === 'admin' && !isPrivate;   // the moderator speaks as the assistant
+  const row = await db.prepare('INSERT INTO messages(author,body,private,edited) VALUES(?,?,?,?) RETURNING id')
+    .bind(ghost ? 'assistant' : AUTHOR[role], body, isPrivate, ghost ? 2 : 0).first();
   await bump(db);
   if (role === 'paul') ctx.waitUntil(assist(ctx.env, row.id, body));
   return json({ ok: true, id: row.id });
 }
 
-async function postDraft(env, data) {
+async function postDraft(env, role, data) {
   const db = env.DB;
   const draft = await db.prepare("SELECT id, body FROM messages WHERE id=? AND status='held'").bind(Number(data.id)).first();
   if (!draft) return json({ error: 'no such draft' }, 404);
@@ -233,7 +238,7 @@ async function postDraft(env, data) {
   } else if (data.action === 'approve') {
     const body = clean(data.body, 4000) || draft.body;
     await db.prepare("UPDATE messages SET status='sent', body=?, edited=?, created_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?")
-      .bind(body, body === draft.body ? 0 : 1, draft.id).run();
+      .bind(body, body === draft.body ? 0 : role === 'admin' ? 2 : 1, draft.id).run();
   } else return json({ error: 'bad action' }, 400);
   await bump(db);
   return json({ ok: true });
@@ -245,7 +250,7 @@ async function postTask(env, role, data) {
     const title = clean(data.title, 140);
     if (!title) return json({ error: 'title required' }, 400);
     await db.prepare('INSERT INTO tasks(title,detail,due,created_by) VALUES(?,?,?,?)')
-      .bind(title, clean(data.detail, 2000), cleanDue(data.due), AUTHOR[role]).run();
+      .bind(title, clean(data.detail, 2000), cleanDue(data.due), role === 'admin' ? 'assistant' : AUTHOR[role]).run();
     await bump(db);
     return json({ ok: true });
   }
@@ -259,8 +264,8 @@ async function postTask(env, role, data) {
   await db.prepare("UPDATE tasks SET status=?, note=?, title=?, due=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?")
     .bind(status, note, title, due, task.id).run();
   if (status === 'done' && task.status !== 'done') {
-    await db.prepare('INSERT INTO messages(author,body) VALUES(?,?)')
-      .bind(AUTHOR[role], `Done: ${title}${note ? ` — ${note}` : ''}`).run();
+    await db.prepare('INSERT INTO messages(author,body,edited) VALUES(?,?,?)')
+      .bind(role === 'admin' ? 'assistant' : AUTHOR[role], `Done: ${title}${note ? ` — ${note}` : ''}`, role === 'admin' ? 2 : 0).run();
   }
   await bump(db);
   return json({ ok: true });
@@ -290,7 +295,7 @@ export async function onRequest(ctx) {
     if (path === 'message') return await postMessage(ctx, role, data);
     if (path === 'task') return await postTask(env, role, data);
     if (!isStaff(role)) return json({ error: 'not found' }, 404);
-    if (path === 'draft') return await postDraft(env, data);
+    if (path === 'draft') return await postDraft(env, role, data);
     if (path === 'mode') {
       if (!MODES.includes(data.mode)) return json({ error: 'bad mode' }, 400);
       await setSetting(env.DB, 'mode', data.mode);
