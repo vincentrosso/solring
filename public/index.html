@@ -373,7 +373,7 @@ $('wipe').addEventListener('click', async (e) => {
   e.target.textContent = 'Wipe all';
   try { await api('admin/wipe', { confirm: 'wipe' }); await poll(); } catch {}
 });
-$('go').addEventListener('click', () => { code = $('code').value.trim(); if (code) { store.set('solring-code', code); $('code').value = ''; poll(); } });
+$('go').addEventListener('click', () => { code = $('code').value.trim().replace(/^.*#k=/, ''); if (code) { store.set('solring-code', code); $('code').value = ''; poll(); } });
 $('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('go').click(); });
 
 // Magic link: /#k=CODE signs in once, then the code leaves the address bar.

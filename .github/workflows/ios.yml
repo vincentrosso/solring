@@ -1,0 +1,19 @@
+name: ios
+# macOS minutes bill at 10x on a private repo: only runs when ios/ changes, or by hand.
+on: { push: { paths: ["ios/**", ".github/workflows/ios.yml"] }, workflow_dispatch: {} }
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: cd ios && xcodegen generate
+      - name: Build for simulator (unsigned)
+        run: |
+          set -o pipefail
+          cd ios && xcodebuild -project SolRing.xcodeproj -scheme SolRing \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -25
+      - run: cd ios/build/Build/Products/Debug-iphonesimulator && zip -qr "$GITHUB_WORKSPACE/SolRing-simulator.zip" SolRing.app
+      - uses: actions/upload-artifact@v4
+        with: { name: solring-ios-simulator, path: SolRing-simulator.zip }
