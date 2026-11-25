@@ -58,6 +58,12 @@ Both run by hand from the Actions tab (or `gh workflow run <name> --ref main`). 
   (they expire 2027-11-25; files in `~/tmp/solring-ios-signing/`). Build number = 100 + run number. Apple details: `~/tmp/solring-apple.txt`.
 - **`android-release`**: signed `.aab` (for Google Play) and `.apk`, artifact `beatrix-android-release`; last copies in `dist/` (gitignored).
   Upload key: `~/tmp/solring-android-upload.p12`, details in `~/tmp/solring-android.txt`. versionCode = 100 + run number.
+- **App Store listing (2026-11-24):** version 1.0, build 104 attached; description, keywords, category Productivity, age rating, free price,
+  all territories, review notes and three screenshots (`store/screenshots/`, headless Chrome at 500 px wide, the narrowest it honours)
+  were set through the API. The scripts hold contact details, so they live outside this public repo in `~/tmp/solring-store/`.
+  **Submission is blocked on three forms the API cannot reach**: App Privacy answers and two compliance forms (a security one and an
+  AI-generated-content one). Fill them on appstoreconnect.apple.com, then run `submit.py`. The demo chat used for the screenshots is
+  still on the live site (admin Wipe all removes it) and enrolment is open until 2026-12-02 so the reviewer can tap "I'm Paul".
 - **Not done:** no Google Play developer account exists, so nothing is on Play. On Apple the build is uploaded but not submitted:
   the listing still needs screenshots, description, age rating, privacy answers and review contact, and a web-view-only app risks
   rejection under guideline 4.2.
