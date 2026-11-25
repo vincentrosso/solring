@@ -45,7 +45,6 @@ header h1 { font-size:18px; margin:0; letter-spacing:.02em; display:flex; align-
 .seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
 .seg button { border:0; border-radius:0; background:none; padding:5px 10px; font-size:13px; }
 .seg button.on { background:var(--gold); color:#14121c; font-weight:600; }
-.tabs { display:none; }
 
 main { flex:1; min-height:0; display:grid; grid-template-columns:1fr; }
 main.two { grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); }
@@ -92,22 +91,45 @@ h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(-
 #err { color:var(--bad); font-size:14px; min-height:20px; }
 
 @media (max-width:820px) {
-  .tabs { display:inline-flex; }
   main.two { grid-template-columns:1fr; }
-  main.two section { display:none; }
-  main.two section.show { display:flex; }
-  #tasksPane { border-left:0; }
+  #tasksPane, #calPane, #morePane { border-left:0; }
   .msg { max-width:90%; }
 }
 
 #seats { display:flex; flex-direction:column; gap:10px; }
 #seats button { padding:14px; font-size:18px; }
-#devices { padding:10px 16px 0; display:flex; flex-direction:column; gap:8px; max-height:45%; overflow-y:auto; }
+#devices { display:flex; flex-direction:column; gap:8px; }
 #devices h2 { padding:0; }
 .dev { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:9px 12px; font-size:14px; }
 .dev.pending { border-color:var(--sun); background:var(--held); }
 .dev .row { margin-top:6px; }
 .dev .row button { font-size:13px; padding:4px 10px; }
+/* Top-level menu: always on screen, four places to go */
+#nav { display:flex; background:var(--panel); border-top:1px solid var(--line); padding:4px 6px calc(4px + env(safe-area-inset-bottom)); }
+#nav button { flex:1; border:0; background:none; border-radius:12px; padding:6px 2px; display:flex; flex-direction:column; align-items:center; gap:1px; color:var(--dim); font-size:11px; }
+#nav button b { font-size:20px; line-height:1.1; font-weight:400; filter:grayscale(1); opacity:.7; }
+#nav button.on { color:var(--sun); font-weight:600; }
+#nav button.on b { filter:none; opacity:1; }
+.composer, .addtask { padding-bottom:10px; }
+main.two section { display:none; }
+main.two section.show { display:flex; }
+@media (min-width:821px) { main.two #chatPane { display:flex; } }   /* wide screen: chat always on the left */
+#calPane, #morePane { border-left:1px solid var(--line); }
+@media (min-width:821px) { main.two #chatPane.show ~ #tasksPane { display:flex; } }   /* wide screen on Chat: requests sit beside it */
+.menu { display:block; width:100%; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:13px 14px; color:var(--ink); text-decoration:none; font-size:16px; }
+#out { color:var(--bad); }
+.calbar { display:flex; align-items:center; gap:8px; padding:10px 16px 4px; }
+.calbar h2 { flex:1; padding:0; font-size:15px; color:var(--ink); text-transform:none; letter-spacing:0; }
+.calgrid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; padding:2px 12px; }
+#calDow span { text-align:center; font-size:11px; color:var(--dim); }
+.day { aspect-ratio:1/0.82; border:1px solid transparent; border-radius:12px; background:none; padding:2px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:15px; }
+.day.out { color:var(--dim); opacity:.45; }
+.day.today { border-color:var(--sun); }
+.day.sel { background:var(--sun); color:#1d1b2f; font-weight:600; }
+.day i { width:6px; height:6px; border-radius:50%; background:var(--sun); }
+.day i.done { background:var(--dim); }
+.day.sel i { background:#1d1b2f; }
+.day i.none { visibility:hidden; }
 /* Beatrix look */
 header h1, #login h1 { font-family:"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-weight:600; letter-spacing:0; }
 header h1 { font-size:21px; }
@@ -145,18 +167,11 @@ textarea:focus, input:focus { outline:2px solid var(--sun); outline-offset:1px; 
     <h1><img class="ring" src="logo.svg" alt="">Beatrix</h1>
     <span class="who" id="who"></span>
     <span class="spacer"></span>
-    <span class="seg tabs" id="tabs">
-      <button data-tab="chatPane" class="on">Chat</button>
-      <button data-tab="tasksPane" id="tasksTab">Tasks</button>
-    </span>
     <span class="seg" id="modes" hidden title="Who answers Paul">
       <button data-mode="auto" title="Beatrix answers Paul straight away; you watch">Auto</button>
       <button data-mode="review" title="Beatrix drafts; nothing reaches Paul until you approve">Review</button>
       <button data-mode="off" title="Beatrix stays silent; you answer">Off</button>
     </span>
-    <span class="who" id="usage" hidden></span>
-    <button id="wipe" hidden title="Delete every message and task">Wipe all</button>
-    <button class="quiet" id="out" title="Sign out">Sign out</button>
   </header>
 
   <main id="main" class="two" hidden>
@@ -171,7 +186,6 @@ textarea:focus, input:focus { outline:2px solid var(--sun); outline-offset:1px; 
       </div>
     </section>
     <section id="tasksPane">
-      <div id="devices" hidden></div>
       <h2 id="tasksHead">Tasks</h2>
       <div class="scroll" id="tasks"></div>
       <div class="addtask">
@@ -180,7 +194,41 @@ textarea:focus, input:focus { outline:2px solid var(--sun); outline-offset:1px; 
         <button id="addTask">Add</button>
       </div>
     </section>
+    <section id="calPane">
+      <div class="calbar">
+        <button id="calPrev" aria-label="Previous month">&lsaquo;</button>
+        <h2 id="calTitle"></h2>
+        <button id="calToday">Today</button>
+        <button id="calNext" aria-label="Next month">&rsaquo;</button>
+      </div>
+      <div class="calgrid" id="calDow"></div>
+      <div class="calgrid" id="calGrid"></div>
+      <h2 id="calDayHead"></h2>
+      <div class="scroll" id="calList"></div>
+      <div class="addtask">
+        <input type="text" id="calNew" placeholder="Add for this day" maxlength="140">
+        <button id="calAdd">Add</button>
+      </div>
+    </section>
+    <section id="morePane">
+      <div class="scroll">
+        <div class="dev" id="meCard"></div>
+        <div class="dev" id="usage" hidden></div>
+        <div id="devices" hidden></div>
+        <a class="menu" href="/about/">About Beatrix</a>
+        <a class="menu" href="/about/#privacy">Privacy</a>
+        <a class="menu" href="/about/#support">Help</a>
+        <button class="menu" id="wipe" hidden title="Delete every message and task">Wipe all</button>
+        <button class="menu" id="out">Sign out</button>
+      </div>
+    </section>
   </main>
+  <nav id="nav" hidden>
+    <button data-tab="chatPane" class="on"><b>&#x1F4AC;</b><span>Chat</span></button>
+    <button data-tab="tasksPane" id="tasksTab"><b>&#x2611;&#xFE0F;</b><span id="tasksLabel">Requests</span></button>
+    <button data-tab="calPane"><b>&#x1F4C5;</b><span>Calendar</span></button>
+    <button data-tab="morePane"><b>&#x2630;</b><span id="moreLabel">More</span></button>
+  </nav>
 </div>
 
 <script>
@@ -247,7 +295,7 @@ const staff = () => S.role === 'katherine' || S.role === 'admin';
 // Shown only until this device has a seat: one tap on a name, nothing to type.
 function showLogin(info) {
   S = null; rev = '';
-  $('login').hidden = false; $('top').hidden = true; $('main').hidden = true;
+  $('login').hidden = false; $('top').hidden = true; $('main').hidden = true; $('nav').hidden = true;
   $('seats').hidden = Boolean(info.waiting || info.removed);
   $('hello').textContent = info.removed ? 'This device is no longer signed in.'
     : info.waiting ? `Hi ${NAMES[info.waiting]}. One moment: getting this device ready.`
@@ -266,7 +314,7 @@ async function poll() {
 
 function editing() {
   const a = document.activeElement;
-  return a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT') && (a.closest('#feed') || a.closest('#tasks'));
+  return a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT') && (a.closest('#feed') || a.closest('#tasks') || a.closest('#calList'));
 }
 
 function renderHeader() {
@@ -274,17 +322,19 @@ function renderHeader() {
   const admin = S.role === 'admin';
   $('who').textContent = admin ? 'Moderator · Katherine was here ' + ago(S.kat_seen)
     : kat ? 'Katherine · PA for Paul' : 'Katherine was here ' + ago(S.kat_seen);
-  $('wipe').hidden = !admin; $('usage').hidden = !admin; $('out').hidden = !code;
+  $('wipe').hidden = !admin; $('usage').hidden = !admin;
+  $('meCard').textContent = admin ? 'Signed in as moderator.' : `Signed in as ${NAMES[S.role]} on this device.` + (kat ? '' : ' Katherine was here ' + ago(S.kat_seen) + '.');
   if (admin && S.ai_cap) $('usage').textContent = `Beatrix replies today: ${S.ai_today}/${S.ai_cap}`;
   $('modes').hidden = !kat;
   for (const b of $('modes').children) b.classList.toggle('on', b.dataset.mode === S.mode);
   const open = (S.tasks || []).filter((t) => t.status !== 'done').length;
   const asking = (S.devices || []).filter((d) => d.status === 'pending').length;
-  $('tasksTab').textContent = (kat ? 'Tasks' : 'Requests') + (open + asking ? ' (' + (open + asking) + ')' : '');
+  $('tasksLabel').textContent = (kat ? 'Tasks' : 'Requests') + (open ? ' (' + open + ')' : '');
+  $('moreLabel').textContent = 'More' + (asking ? ' (' + asking + ')' : '');
 }
 
 function render() {
-  $('login').hidden = true; $('top').hidden = false; $('main').hidden = false;
+  $('login').hidden = true; $('top').hidden = false; $('main').hidden = false; $('nav').hidden = false;
   renderHeader();
   if (editing()) { dirty = true; return; }
   dirty = false;
@@ -315,6 +365,52 @@ function render() {
   list.replaceChildren();
   if (!S.tasks.length) list.append(el('div', { class: 'empty' }, kat ? 'No open tasks.' : 'Nothing asked for yet.'));
   for (const t of S.tasks) list.append(taskCard(t, kat));
+  renderCal();
+}
+
+// Calendar: every request or task that has a date, on a month grid. Tap a day to see it and add to it.
+const ymd = (d) => d.toLocaleDateString('en-CA');
+let calSel = ymd(new Date());
+let calMonth = calSel.slice(0, 7);
+function renderCal() {
+  if (!S) return;
+  const kat = staff();
+  const [y, m] = calMonth.split('-').map(Number);
+  const first = new Date(y, m - 1, 1);
+  $('calTitle').textContent = first.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  if (!$('calDow').children.length) for (const d of ['S', 'M', 'T', 'W', 'T', 'F', 'S']) $('calDow').append(el('span', {}, d));
+  const byDay = {};
+  for (const t of S.tasks) if (t.due) (byDay[t.due] = byDay[t.due] || []).push(t);
+  const today = ymd(new Date());
+  const grid = $('calGrid');
+  grid.replaceChildren();
+  const start = new Date(y, m - 1, 1 - first.getDay());
+  const weeks = Math.ceil((first.getDay() + new Date(y, m, 0).getDate()) / 7);
+  for (let i = 0; i < weeks * 7; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const key = ymd(d);
+    const items = byDay[key] || [];
+    const open = items.some((t) => t.status !== 'done');
+    grid.append(el('button', { class: 'day' + (d.getMonth() !== m - 1 ? ' out' : '') + (key === today ? ' today' : '') + (key === calSel ? ' sel' : ''),
+      'aria-label': d.toDateString() + (items.length ? ', ' + items.length + ' items' : ''),
+      onclick: () => { calSel = key; calMonth = key.slice(0, 7); renderCal(); } },
+      String(d.getDate()), el('i', { class: items.length ? (open ? '' : 'done') : 'none' })));
+  }
+  const sel = new Date(calSel + 'T12:00:00');
+  const nice = sel.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  $('calDayHead').textContent = calSel === today ? 'Today \u00b7 ' + nice : nice;
+  $('calNew').placeholder = (kat ? 'Add a task for ' : 'Ask for something on ') + sel.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const list = $('calList');
+  list.replaceChildren();
+  const items = byDay[calSel] || [];
+  if (!items.length) list.append(el('div', { class: 'empty' }, 'Nothing on this day.'));
+  for (const t of items) list.append(taskCard(t, kat));
+}
+function calStep(n) {
+  const [y, m] = calMonth.split('-').map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  calMonth = ymd(d).slice(0, 7);
+  renderCal();
 }
 
 // Admin only: who is signed in on what, and one-tap answers for a device asking to get in.
@@ -427,15 +523,30 @@ $('modes').addEventListener('click', async (e) => {
   if (!mode) return;
   try { await api('mode', { mode }); await poll(); } catch {}
 });
-$('tabs').addEventListener('click', (e) => {
-  const tab = e.target.dataset.tab;
-  if (!tab) return;
-  for (const b of $('tabs').children) b.classList.toggle('on', b === e.target);
-  for (const id of ['chatPane', 'tasksPane']) $(id).classList.toggle('show', id === tab);
+function go(tab) {
+  for (const b of $('nav').children) b.classList.toggle('on', b.dataset.tab === tab);
+  for (const id of ['chatPane', 'tasksPane', 'calPane', 'morePane']) $(id).classList.toggle('show', id === tab);
+  if (tab === 'chatPane') { const feed = $('feed'); feed.scrollTop = feed.scrollHeight; }
+  store.set('beatrix-tab', tab);
+}
+$('nav').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) go(b.dataset.tab); });
+$('calPrev').addEventListener('click', () => calStep(-1));
+$('calNext').addEventListener('click', () => calStep(1));
+$('calToday').addEventListener('click', () => { calSel = ymd(new Date()); calMonth = calSel.slice(0, 7); renderCal(); });
+$('calAdd').addEventListener('click', async () => {
+  const title = $('calNew').value.trim();
+  if (!title) return;
+  try { await api('task', { title, due: calSel }); $('calNew').value = ''; await poll(); } catch {}
 });
+$('calNew').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('calAdd').click(); });
 document.addEventListener('focusout', () => setTimeout(() => { if (dirty && S && !editing()) render(); }, 50));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
-$('out').addEventListener('click', () => { code = ''; store.del('solring-code'); S = null; rev = ''; poll(); });
+$('out').addEventListener('click', async (e) => {
+  if (e.target.textContent !== 'Tap again to sign out') { e.target.textContent = 'Tap again to sign out'; setTimeout(() => { e.target.textContent = 'Sign out'; }, 4000); return; }
+  e.target.textContent = 'Sign out';
+  if (code) { code = ''; store.del('solring-code'); } else { try { await api('leave', {}); } catch {} }
+  S = null; rev = ''; go('chatPane'); poll();
+});
 $('seats').addEventListener('click', async (e) => {
   const role = e.target.dataset.seat;
   if (!role) return;
@@ -455,7 +566,8 @@ $('wipe').addEventListener('click', async (e) => {
 // The moderator's private link: /#k=CODE signs in once, then the code leaves the address bar.
 const hash = new URLSearchParams(location.hash.slice(1));
 if (hash.get('k')) { code = hash.get('k'); store.set('solring-code', code); history.replaceState(null, '', location.pathname); }
-if (hash.get('tab') === 'tasks') $('tasksTab').click();   // #tab=tasks opens on the task list
+const TABS = { tasks: 'tasksPane', calendar: 'calPane', more: 'morePane' };
+go(TABS[hash.get('tab')] || 'chatPane');   // #tab=tasks | calendar | more opens there
 poll();
 </script>
 </body>

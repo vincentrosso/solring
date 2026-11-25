@@ -295,6 +295,10 @@ export async function onRequest(ctx) {
     if (!post) return json({ error: 'not found' }, 404);
     if (path === 'message') return await postMessage(ctx, role, data);
     if (path === 'task') return await postTask(env, role, data);
+    if (path === 'leave') {   // Sign out on this device: forget it, so it can pick a name again
+      if (who.deviceId) { await env.DB.prepare('DELETE FROM devices WHERE id=?').bind(who.deviceId).run(); await bump(env.DB); }
+      return json({ ok: true });
+    }
     if (!isStaff(role)) return json({ error: 'not found' }, 404);
     if (path === 'draft') return await postDraft(env, role, data);
     if (path === 'mode') {

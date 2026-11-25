@@ -68,3 +68,9 @@ Both run by hand from the Actions tab (or `gh workflow run <name> --ref main`). 
 - **Not done:** no Google Play developer account exists, so nothing is on Play. On Apple the build is uploaded but not submitted:
   the listing still needs screenshots, description, age rating, privacy answers and review contact, and a web-view-only app risks
   rejection under guideline 4.2.
+
+## Screens (2026-11-25)
+A bottom bar is the top-level menu: Chat, Requests (Tasks for staff), Calendar, More. Calendar is a month grid of every task with a due date;
+tap a day to list and add. More holds who you are, About / Privacy / Help, Sign out (a device calls `POST /api/leave`, which deletes its row),
+and for the moderator the Devices panel, AI usage and Wipe all. `#tab=tasks|calendar|more` opens on that tab. On a wide screen Chat stays on the left.
+While enrolment is open every device that taps a name gets in at once; the earlier one-seat rule stranded the App Store reviewer.
